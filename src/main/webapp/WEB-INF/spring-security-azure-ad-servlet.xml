@@ -1,0 +1,81 @@
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:security="http://www.springframework.org/schema/security"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+                    http://www.springframework.org/schema/beans/spring-beans.xsd
+                    http://www.springframework.org/schema/security
+                    http://www.springframework.org/schema/security/spring-security.xsd">
+
+    <import resource="spring-persistent-servlet.xml"/>
+
+    <security:authentication-manager alias="authenticationManager">
+        <security:authentication-provider user-service-ref="localUserDetailsService"/>
+    </security:authentication-manager>
+
+    <security:http pattern="/services/login" security="none"/>
+    <security:http pattern="/images/**" security="none"/>
+
+    <security:http use-expressions="true" entry-point-ref="authenticationEntryPoint">
+        <security:intercept-url pattern="/" access="isFullyAuthenticated()"/>
+        <security:intercept-url pattern="/**" access="isFullyAuthenticated()"/>
+
+        <security:intercept-url pattern="/services/accessdenied" access="permitAll"/>
+
+        <security:custom-filter before="FORM_LOGIN_FILTER" ref="azureADAuthenticationFilter"/>
+        <security:custom-filter position="LOGOUT_FILTER" ref="logoutFilter"/>
+
+    </security:http>
+
+    <bean id="azureADAuthenticationFilter"
+          class="com.geeksoverflow.security.azuread.filter.AzureADAuthenticationFilter">
+        <constructor-arg index="0" value="/azuread/auth"/>
+        <constructor-arg index="1" ref="successHandler"/>
+        <constructor-arg index="2" ref="failureHandler"/>
+        <constructor-arg index="3" ref="azureADAuthenticationManager"/>
+        <property name="authenticationManager" ref="authenticationManager"/>
+    </bean>
+
+    <bean id="azureADAuthenticationManager"
+          class="com.geeksoverflow.security.azuread.manager.AzureADAuthenticationManager">
+        <constructor-arg name="azureADProps" ref="azureADProps"/>
+        <property name="userDetailsService" ref="localUserDetailsService"/>
+        <property name="registerUserDetailsService" ref="registerUserDetailsService"/>
+    </bean>
+
+    <bean id="azureADProps" class="com.geeksoverflow.security.azuread.model.AzureADClientProps">
+        <constructor-arg index="0" value="${azure.ad.client.id}"/>
+        <constructor-arg index="1" value="${azure.ad.client.secret}"/>
+        <constructor-arg index="2" value="${azure.ad.tenant.id}"/>
+        <constructor-arg index="3" value="${azure.ad.tenant.authority}"/>
+    </bean>
+
+    <bean id="authenticationEntryPoint"
+          class="com.geeksoverflow.security.azuread.entrypoint.AuthenticationEntryPoint">
+        <constructor-arg name="loginFormUrl" value="/services/login"/>
+    </bean>
+
+    <bean id="successHandler" class="com.geeksoverflow.security.azuread.handler.AzureADAuthenticationSuccessHandler"/>
+    <bean id="failureHandler"
+          class="com.geeksoverflow.security.azuread.handler.AzureADAuthenticationFailureHandler">
+        <constructor-arg name="redirectionUrl" value="/services/accessdenied"/>
+    </bean>
+    <bean id="logoutFilter" class="org.springframework.security.web.authentication.logout.LogoutFilter">
+        <constructor-arg name="logoutSuccessHandler" ref="logoutSuccessHandler"/>
+        <constructor-arg name="handlers">
+            <list>
+                <bean name="securityContextLogoutHandler"
+                      class="org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler"/>
+            </list>
+        </constructor-arg>
+    </bean>
+
+    <bean id="logoutSuccessHandler"
+          class="org.springframework.security.web.authentication.logout.SimpleUrlLogoutSuccessHandler"/>
+
+    <bean name="localUserDetailsService"
+          class="com.geeksoverflow.security.azuread.service.LocalUserDetailsService"/>
+
+    <bean name="registerUserDetailsService"
+          class="com.geeksoverflow.security.azuread.service.RegisterUserDetailsService"/>
+
+</beans>
